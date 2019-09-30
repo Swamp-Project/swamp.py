@@ -38,4 +38,4 @@ for entry in j['results']:
 print(Fore.YELLOW + "[+] " + Fore.RED + "Outputting discovered URLs associate to {}...".format(id))
 # Sort the set and print
 for url in sorted(uniqueurls):
-    print(url)
+    print(Fore.YELLOW + '[!]' + Fore.GREEN + " URL: " + Fore.WHITE + url)
