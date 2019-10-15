@@ -11,8 +11,9 @@ python3 swamp.py -id UA-6888464-2
 
 Example using a url:
 ```bash
-python3 swamp.py -url https://medium.com
+python3 swamp.py -url https://www.medium.com
 ```
+Note that the url protocol must be provided.
 
 Full results are printed to screen, and can be written to file with the `-o` flag.
 ```bash
