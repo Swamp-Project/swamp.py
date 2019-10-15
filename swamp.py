@@ -28,7 +28,7 @@ class Swamp(object):
 
         if self.outfile != None:
             with open(self.outfile,'w') as fObj:
-                dt = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                dt = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
                 fObj.write("{}\n".format(dt))
 
         if self.gid != None:
