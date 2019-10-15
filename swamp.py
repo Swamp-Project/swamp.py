@@ -2,6 +2,7 @@ import json
 import requests
 import sys
 import argparse
+import re
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from colorama import init
 from colorama import Fore, Back, Style
@@ -16,13 +17,23 @@ class Swamp(object):
 
         ap = argparse.ArgumentParser(prog="swamp", usage="python %(prog)s [options]")
         ap.add_argument('-id', help="Google Analytics ID", action="store")
+        ap.add_argument('-url', help="Website URL", action="store")
         args = ap.parse_args()
 
         self.gid = args.id
-        
-        self.scan_gid(self.gid)
-        
+        self.url = args.url
 
+        if self.gid != None:
+            self.scan_gid(self.gid)
+
+        elif self.url != None:
+            gids = self.get_gids_from_url(self.url)
+            for gid in gids:
+                self.scan_gid(gid)
+        
+        else:
+            print(Fore.RED + "You must pass in either '-url <webpage url>' or '-id <google tracking id>'")
+            print(Style.RESET_ALL)
     def show_banner(self):
 
         print()
@@ -40,13 +51,27 @@ class Swamp(object):
     
         print()
         print(Fore.GREEN + "An OSINT tool for Google Analytics ID Reverse lookup")
-        print(Fore.RED + "By Jake Creps | With help from Francesco Poldi and WebBreacher")
+        print(Fore.RED + "By Jake Creps | With help from Francesco Poldi and WebBreacher and Mark Ditsworth")
         print(Fore.WHITE)
+    
+    def get_gids_from_url(self,url):
+        print(Fore.GREEN + "Analyzing {}...".format(url))
+        urlresponse = requests.get(url,verify=False)
+        gids_list = re.findall('UA\-[0-9]+\-[0-9]+',urlresponse.text)
+
+        for gid in gids_list:
+            print(Fore.GREEN + "Discovered " + Fore.YELLOW + "{}".format(gid) + Fore.GREEN + " Google Tracking ID in " + Fore.WHITE + "{}".format(url))
+        return gids_list
+
+    def scan_gids(self, ids):
+        for _id in ids:
+            self.scan_gid(_id)
 
     def scan_gid(self, id):
-
+        
+        print()
         print(Fore.GREEN + "Using {} for Google Analytic Lookup".format(id))
-
+    
         url = 'https://urlscan.io/api/v1/search/?q={}'.format(id) # UA-6888464-2
 
         try:
@@ -71,6 +96,8 @@ class Swamp(object):
         # Sort the set and print
         for url in sorted(uniqueurls):
             print(Fore.YELLOW + '[!]' + Fore.GREEN + " URL: " + Fore.WHITE + url)
+        
+        print(Style.RESET_ALL)
 
 if __name__ == '__main__':
     SwampApp = Swamp()
