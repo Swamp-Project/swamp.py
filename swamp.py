@@ -6,6 +6,7 @@ import re
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from colorama import init
 from colorama import Fore, Back, Style
+from datetime import datetime
 
 # disable warning HTTPS
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -18,10 +19,17 @@ class Swamp(object):
         ap = argparse.ArgumentParser(prog="swamp", usage="python %(prog)s [options]")
         ap.add_argument('-id', help="Google Analytics ID", action="store")
         ap.add_argument('-url', help="Website URL", action="store")
+        ap.add_argument('-o', help="Output file for results", action="store")
         args = ap.parse_args()
 
         self.gid = args.id
         self.url = args.url
+        self.outfile = args.o
+
+        if self.outfile != None:
+            with open(self.outfile,'w') as fObj:
+                dt = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                fObj.write("{}\n".format(dt))
 
         if self.gid != None:
             self.scan_gid(self.gid)
@@ -56,7 +64,12 @@ class Swamp(object):
         print(Fore.WHITE)
     
     def get_gids_from_url(self,url):
-        print(Fore.GREEN + "Analyzing {}...".format(url))
+        print(Fore.GREEN + "Analyzing {}...".format(url) + Style.RESET_ALL)
+
+        if self.outfile != None:
+            with open(self.outfile,'a') as fObj:
+                fObj.write("Anlaysis for {}\n".format(url))
+
         urlresponse = requests.get(url,verify=False)
         gids_list = re.findall('UA\-[0-9]+\-[0-9]+',urlresponse.text)
 
@@ -93,11 +106,18 @@ class Swamp(object):
         for entry in j['results']:
             uniqueurls.add((entry['page']['url']))
         print(Fore.YELLOW + "[+] " + Fore.RED + "Outputting discovered URLs associate to {}...".format(id))
+        
+        if self.outfile != None:
+            with open(self.outfile,'a') as fObj:
+                fObj.write("Outputting discovered URLs associate to {}\n".format(id))
 
         # Sort the set and print
         for url in sorted(uniqueurls):
             print(Fore.YELLOW + '[!]' + Fore.GREEN + " URL: " + Fore.WHITE + url)
-        
+            if self.outfile != None:
+                with open(self.outfile,'a') as fObj:
+                    fObj.write("URL: {}\n".format(url))
+
         print(Style.RESET_ALL)
 
 if __name__ == '__main__':

@@ -2,11 +2,19 @@
 An OSINT tool for discovering associated sites through Google Analytics Tracking IDs
 using the urlscan.io API
 
-Enter your Google Analytics Tracking ID and let Swamp take care of the rest.
+Enter your Google Analytics Tracking ID or URL and let Swamp take care of the rest.
 
-Example: 
-
+Example using a specific tracking ID: 
+```python
 python3 swamp.py -id UA-6888464-2
+```
 
-Full results are printed to screen.
+Example using a url:
+```python
+python3 swamp.py -url https://medium.com
+```
 
+Full results are printed to screen, and can be written to file with the `-o` flag.
+```python
+python3 swamp.py -id UA-6888464-2 -o myOutputFile.txt
+```
