@@ -34,6 +34,7 @@ class Swamp(object):
         else:
             print(Fore.RED + "You must pass in either '-url <webpage url>' or '-id <google tracking id>'")
             print(Style.RESET_ALL)
+
     def show_banner(self):
 
         print()
