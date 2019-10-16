@@ -13,7 +13,7 @@ Example using a url:
 ```bash
 python3 swamp.py -url https://www.medium.com
 ```
-Note that the url protocol must be provided.
+Note that if the URL protocol is not given (e.g. `-url medium.com`), Swamp will default to HTTPS, and try HTTP if HTTPS fails.
 
 Full results are printed to screen, and can be written to file with the `-o` flag.
 ```bash
