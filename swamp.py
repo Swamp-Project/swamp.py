@@ -2,9 +2,11 @@ import json
 import requests
 import sys
 import argparse
+import re
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from colorama import init
 from colorama import Fore, Back, Style
+from datetime import datetime
 
 # disable warning HTTPS
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -16,12 +18,30 @@ class Swamp(object):
 
         ap = argparse.ArgumentParser(prog="swamp", usage="python %(prog)s [options]")
         ap.add_argument('-id', help="Google Analytics ID", action="store")
+        ap.add_argument('-url', help="Website URL", action="store")
+        ap.add_argument('-o', help="Output file for results", action="store")
         args = ap.parse_args()
 
         self.gid = args.id
+        self.url = args.url
+        self.outfile = args.o
+
+        if self.outfile != None:
+            with open(self.outfile,'w') as fObj:
+                dt = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+                fObj.write("{}\n".format(dt))
+
+        if self.gid != None:
+            self.scan_gid(self.gid)
+
+        elif self.url != None:
+            gids = self.get_gids_from_url(self.url)
+            for gid in gids:
+                self.scan_gid(gid)
         
-        self.scan_gid(self.gid)
-        
+        else:
+            print(Fore.RED + "You must pass in either '-url <webpage url>' or '-id <google tracking id>'")
+            print(Style.RESET_ALL)
 
     def show_banner(self):
 
@@ -40,13 +60,32 @@ class Swamp(object):
     
         print()
         print(Fore.GREEN + "An OSINT tool for Google Analytics ID Reverse lookup")
-        print(Fore.RED + "By Jake Creps | With help from Francesco Poldi and WebBreacher")
+        print(Fore.RED + "By Jake Creps | With help from Francesco Poldi and WebBreacher and Mark Ditsworth")
         print(Fore.WHITE)
+    
+    def get_gids_from_url(self,url):
+        print(Fore.GREEN + "Analyzing {}...".format(url) + Style.RESET_ALL)
+
+        if self.outfile != None:
+            with open(self.outfile,'a') as fObj:
+                fObj.write("Anlaysis for {}\n".format(url))
+
+        urlresponse = requests.get(url,verify=False)
+        gids_list = re.findall('UA\-[0-9]+\-[0-9]+',urlresponse.text)
+
+        for gid in gids_list:
+            print(Fore.GREEN + "Discovered " + Fore.YELLOW + "{}".format(gid) + Fore.GREEN + " Google Tracking ID in " + Fore.WHITE + "{}".format(url))
+        return gids_list
+
+    def scan_gids(self, ids):
+        for _id in ids:
+            self.scan_gid(_id)
 
     def scan_gid(self, id):
-
+        
+        print()
         print(Fore.GREEN + "Using {} for Google Analytic Lookup".format(id))
-
+    
         url = 'https://urlscan.io/api/v1/search/?q={}'.format(id) # UA-6888464-2
 
         try:
@@ -67,10 +106,19 @@ class Swamp(object):
         for entry in j['results']:
             uniqueurls.add((entry['page']['url']))
         print(Fore.YELLOW + "[+] " + Fore.RED + "Outputting discovered URLs associate to {}...".format(id))
+        
+        if self.outfile != None:
+            with open(self.outfile,'a') as fObj:
+                fObj.write("Outputting discovered URLs associate to {}\n".format(id))
 
         # Sort the set and print
         for url in sorted(uniqueurls):
             print(Fore.YELLOW + '[!]' + Fore.GREEN + " URL: " + Fore.WHITE + url)
+            if self.outfile != None:
+                with open(self.outfile,'a') as fObj:
+                    fObj.write("URL: {}\n".format(url))
+
+        print(Style.RESET_ALL)
 
 if __name__ == '__main__':
     SwampApp = Swamp()
