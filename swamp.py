@@ -13,19 +13,12 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 class Swamp(object):
 
-    def __init__(self, *args, **kwargs):
-        self.show_banner()
+    def __init__(self, id=None, url=None, outfile=None):
+        self.gid = id
+        self.url = url
+        self.outfile = outfile
 
-        ap = argparse.ArgumentParser(prog="swamp", usage="python %(prog)s [options]")
-        ap.add_argument('-id', help="Google Analytics ID", action="store")
-        ap.add_argument('-url', help="Website URL", action="store")
-        ap.add_argument('-o', help="Output file for results", action="store")
-        args = ap.parse_args()
-
-        self.gid = args.id
-        self.url = args.url
-        self.outfile = args.o
-
+    def run(self, cli=False):
         if self.outfile != None:
             # write date and time to file to initialize
             with open(self.outfile,'w') as fObj:
@@ -33,16 +26,22 @@ class Swamp(object):
                 fObj.write("{}\n".format(dt))
 
         if self.gid != None:
-            self.scan_gid(self.gid)
+            urls = self.scan_gid(self.gid, cli=cli)
+            if not cli:
+                return urls
 
         elif self.url != None:
             gids = self.get_gids_from_url(self.handle_url_protocol(self.url))
-            for gid in gids:
-                self.scan_gid(gid)
-        
+            urls = self.scan_gids(gids, cli=cli)
+            if not cli:
+                return urls
+
         else:
             print(Fore.RED + "You must pass in either '-url <webpage url>' or '-id <google tracking id>'")
             print(Style.RESET_ALL)
+
+    def run_cli(self):
+        self.run(cli=True)
 
     def show_banner(self):
 
@@ -119,11 +118,17 @@ class Swamp(object):
             print(Fore.GREEN + "Discovered " + Fore.YELLOW + "{}".format(gid) + Fore.GREEN + " Google Tracking ID in " + Fore.WHITE + "{}".format(url))
         return gids_list
 
-    def scan_gids(self, ids):
-        for _id in ids:
-            self.scan_gid(_id)
+    def scan_gids(self, ids, cli=True):
+        if cli:
+            for _id in ids:
+                self.scan_gid(_id)
+        else:
+            urls = []
+            for _id in ids:
+                urls.extend(self.scan_gid(_id,cli=False))
+            return urls
 
-    def scan_gid(self, id):
+    def scan_gid(self, id, cli=True):
         
         print()
         print(Fore.GREEN + "Using {} for Google Analytic Lookup".format(id))
@@ -136,7 +141,9 @@ class Swamp(object):
         except Exception as e:
             print(Fore.RED + "[ !!! ]   ERROR - {}".format(str(e)))
             sys.exit(1)
-        print(Fore.YELLOW + "[+] " + Fore.RED + "Searching for associated URLs...")
+
+        if cli:
+            print(Fore.YELLOW + "[+] " + Fore.RED + "Searching for associated URLs...")
 
         # Output is already JSON so we just need to load and parse it
         j = json.loads(response.text)
@@ -147,7 +154,9 @@ class Swamp(object):
         # Extract every URL and add to the set
         for entry in j['results']:
             uniqueurls.add((entry['page']['url']))
-        print(Fore.YELLOW + "[+] " + Fore.RED + "Outputting discovered URLs associate to {}...".format(id))
+        
+        if cli:
+            print(Fore.YELLOW + "[+] " + Fore.RED + "Outputting discovered URLs associate to {}...".format(id))
         
         if self.outfile != None:
             with open(self.outfile,'a') as fObj:
@@ -155,12 +164,23 @@ class Swamp(object):
 
         # Sort the set and print
         for url in sorted(uniqueurls):
-            print(Fore.YELLOW + '[!]' + Fore.GREEN + " URL: " + Fore.WHITE + url)
+            if cli:
+                print(Fore.YELLOW + '[!]' + Fore.GREEN + " URL: " + Fore.WHITE + url)
             if self.outfile != None:
                 with open(self.outfile,'a') as fObj:
                     fObj.write("URL: {}\n".format(url))
-
-        print(Style.RESET_ALL)
+        if cli:
+            print(Style.RESET_ALL)
+        else:
+            return list(uniqueurls)
 
 if __name__ == '__main__':
-    SwampApp = Swamp()
+    ap = argparse.ArgumentParser(prog="swamp", usage="python %(prog)s [options]")
+    ap.add_argument('-id', help="Google Analytics ID", action="store")
+    ap.add_argument('-url', help="Website URL", action="store")
+    ap.add_argument('-o', help="Output file for results", action="store")
+    args = ap.parse_args()
+
+    SwampApp = Swamp(id=args.id, url=args.url, outfile=args.o)
+    SwampApp.show_banner()
+    SwampApp.run_cli()
