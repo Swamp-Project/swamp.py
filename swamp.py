@@ -61,7 +61,7 @@ class Swamp(object):
     
         print()
         print(Fore.GREEN + "An OSINT tool for Google Analytics ID Reverse lookup")
-        print(Fore.RED + "By Jake Creps | With help from Francesco Poldi and WebBreacher and Mark Ditsworth")
+        print(Fore.RED + "By Jake Creps | With help from Francesco Poldi, WebBreacher and Mark Ditsworth")
         print(Fore.WHITE)
 
     def handle_url_protocol(self,url):
