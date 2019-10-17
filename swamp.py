@@ -112,6 +112,8 @@ class Swamp(object):
 
         urlresponse = requests.get(url,verify=False)
         gids_list = re.findall('UA\-[0-9]+\-[0-9]+',urlresponse.text)
+        # drop duplicate ids
+        gids_list = set(gids_list)
 
         for gid in gids_list:
             print(Fore.GREEN + "Discovered " + Fore.YELLOW + "{}".format(gid) + Fore.GREEN + " Google Tracking ID in " + Fore.WHITE + "{}".format(url))
