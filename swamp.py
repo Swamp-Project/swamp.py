@@ -127,7 +127,7 @@ class Swamp(object):
             urls = []
             for _id in ids:
                 urls.extend(self.scan_gid(_id))
-            return urls
+            return list(set(urls))
 
     def scan_gid(self, id):
         
@@ -174,6 +174,11 @@ class Swamp(object):
         print(Style.RESET_ALL)
         if not self.cli:
             return list(uniqueurls)
+
+    def url_to_domain(self,url):
+        pattern = re.compile("^http[s]?\://[^/]+")
+        domain = pattern.match(url)
+        return m[0]
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(prog="swamp", usage="python %(prog)s [options]")
