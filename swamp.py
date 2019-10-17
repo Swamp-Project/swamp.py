@@ -128,6 +128,47 @@ class Swamp(object):
             for _id in ids:
                 urls.extend(self.scan_gid(_id))
             return list(set(urls))
+    
+    def query_api(self,url):
+        try:
+            # Make web request for that URL and don't verify SSL/TLS certs
+            response = requests.get(url, verify=False)
+        except Exception as e:
+            print(Fore.RED + "[ !!! ]   ERROR - {}".format(str(e)))
+            sys.exit(1)
+
+        if self.cli:
+            print(Fore.YELLOW + "[+] " + Fore.RED + "Searching for associated URLs...")
+
+        return response
+
+    def query_urlscan(self, id):
+        url = 'https://urlscan.io/api/v1/search/?q={}'.format(id)
+
+        response = self.query_api(url)
+
+        # Output is already JSON so we just need to load and parse it
+        j = json.loads(response.text)
+
+        # Create an empty set to store the URLs so we only get unique ones
+        uniqueurls = set([])
+
+        # Extract every URL and add to the set
+        for entry in j['results']:
+            uniqueurls.add((entry['page']['url']))
+        return uniqueurls
+
+    def query_hacker_target(self, id):
+        # hacker target does not accept the trailing numbers on the Tracking ID (UA-12345-2 is invalid. Must use UA-12345.)
+        if len(id.split('-')) == 3:
+            id = '-'.join(id.split('-')[:2])
+
+        url = 'https://api.hackertarget.com/analyticslookup/?q={}'.format(id)
+        
+        response = self.query_api(url)
+
+        uniqueurls = set(response.text.split('\n'))
+        return uniqueurls
 
     def scan_gid(self, id):
         
@@ -178,7 +219,13 @@ class Swamp(object):
     def url_to_domain(self,url):
         pattern = re.compile("^http[s]?\://[^/]+")
         domain = pattern.match(url)
-        return m[0]
+        return domain[0]
+
+    def urls_to_domains(self,url_iter):
+        domain_set = set([])
+        for url in url_iter:
+            domain_set.add((self.url_to_domain(url)))
+        return list(domain_set)
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(prog="swamp", usage="python %(prog)s [options]")
