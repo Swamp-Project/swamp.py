@@ -19,3 +19,13 @@ Full results are printed to screen, and can be written to file with the `-o` fla
 ```bash
 python3 swamp.py -id UA-6888464-2 -o myOutputFile.txt
 ```
+
+Additionally, you can use swamp.py in your own python script.
+```python
+import swamp
+Swamp = swamp.Swamp()
+associated_urls = Swamp.run(id="UA-12345-1") # list of unique urls associated with the tracking ID UA-12345-1
+associated_urls = Swamp.run(url="infowars.com") # list of unique urls associated with the tracking ID(s) found on infowars.com
+
+associated_domains = Swamp.urls_to_domains(associated_urls) # reduces the list of urls to a list of unique domains
+```
