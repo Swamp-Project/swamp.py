@@ -27,6 +27,7 @@ class Swamp(object):
         self.outfile = args.o
 
         if self.outfile != None:
+            # write date and time to file to initialize
             with open(self.outfile,'w') as fObj:
                 dt = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
                 fObj.write("{}\n".format(dt))
@@ -35,7 +36,7 @@ class Swamp(object):
             self.scan_gid(self.gid)
 
         elif self.url != None:
-            gids = self.get_gids_from_url(self.url)
+            gids = self.get_gids_from_url(self.handle_url_protocol(self.url))
             for gid in gids:
                 self.scan_gid(gid)
         
@@ -62,6 +63,45 @@ class Swamp(object):
         print(Fore.GREEN + "An OSINT tool for Google Analytics ID Reverse lookup")
         print(Fore.RED + "By Jake Creps | With help from Francesco Poldi and WebBreacher and Mark Ditsworth")
         print(Fore.WHITE)
+
+    def handle_url_protocol(self,url):
+        pattern = re.compile('^http[s]?\://')
+        if pattern.match(url):
+            # input string is okay, but make sure it is valid  url
+            validated_url = self.validate_url(url)
+            if not validated_url:
+                raise ValueError("{} is not a valid URL.".format(url))
+            else:
+                return validated_url
+        else:
+            print(Fore.YELLOW + "Protocol not given. Will try HTTPS and then HTTP.")
+            # test if https will work
+            https_url = 'https://' + url
+            validated_https_url = self.validate_url(https_url)
+            if not validated_https_url:
+                # try http
+                print(Fore.RED + "Failed.")
+                http_url = 'http://' + url
+                validated_http_url = self.validate_url(http_url)
+                if not validated_http_url:
+                    raise ValueError("{} is not a valid URL".format(url))
+                else:
+                    return validated_http_url
+            else:
+                return validated_https_url
+    
+    def validate_url(self,url):
+        print(Fore.GREEN + "Validating {}".format(url))
+        check = requests.head(url)
+        if check.status_code < 400:
+            # if redirected, return the redirected url
+            if check.status_code // 100 == 3:
+                print(Fore.YELLOW + "Redirected to " + Fore.WHITE + "{}".format(check.headers['Location']))
+                return check.headers['Location']
+            else:
+                return url
+        else:
+            return False
     
     def get_gids_from_url(self,url):
         print(Fore.GREEN + "Analyzing {}...".format(url) + Style.RESET_ALL)
