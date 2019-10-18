@@ -157,7 +157,9 @@ class Swamp(object):
         for entry in j['results']:
             uniqueurls.add((entry['page']['url']))
         return uniqueurls
-
+    
+    # Free Tier: Limit of 100 queries per day
+    # ToDo: add support for membership
     def query_hacker_target(self, id):
         # hacker target does not accept the trailing numbers on the Tracking ID (UA-12345-2 is invalid. Must use UA-12345.)
         if len(id.split('-')) == 3:
@@ -168,7 +170,27 @@ class Swamp(object):
         response = self.query_api(url)
 
         uniqueurls = set(response.text.split('\n'))
-        return uniqueurls
+        return uniqueurlsa
+    
+    # Returns a limit of 100 results
+    # ToD0: Support setting the limit
+    # ToDo: Support getting more results with iterative requests
+    def query_spyonweb(self,id,api_key):
+        # looks like SpyOnWeb doesn't support trailing number on the ID
+        if len(id.split('-')) == 3:
+            id = '-'.join(id.split('-')[:2])
+
+        url = 'https://api.spyonweb.com/v1/analytics/{}?access_token={}'.format(id,api_key)
+        
+        response = self.query_api(url)
+        j = json.loads(response.text)a
+        if j['status'] != "found":
+            print(Fore.RED + "ERROR. No URLs Found" + Style.RESET_ALL)
+            sys.exit(1)
+        else:
+            urls = j['result']['analytics'][id]['items'].keys()
+            return set(urls)
+
 
     def scan_gid(self, id):
         
