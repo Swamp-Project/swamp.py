@@ -13,9 +13,14 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 class Swamp(object):
 
-    def __init__(self, cli=False, outfile=None): 
+    def __init__(self, cli=False, outfile=None, api="urlscan", api_key=None): 
         self.cli = cli
         self.outfile = outfile
+        self.api = api
+        self.api_key = api_key
+        # ensure api_key is given if needed
+        if self.api == "spyonweb":
+            assert self.api_key != None, "SpyOnWeb Requires and API Key."
 
     def run(self,id=None,url=None):
         gid = id
@@ -254,8 +259,18 @@ if __name__ == '__main__':
     ap.add_argument('-id', help="Google Analytics ID", action="store")
     ap.add_argument('-url', help="Website URL", action="store")
     ap.add_argument('-o', help="Output file for results", action="store")
+    ap.add_argument('-urlscan',help="Use the urlscan API for reverse lookup", action="store_true")
+    ap.add_argument('-spyonweb',help="Use the SpyOnWeb API for reverse lookup", action="store_true")
+    ap.add_argument('-api_key',help="API key or token", action="store")
     args = ap.parse_args()
+    
+    # set api based on user input. defaults to urlscan
+    api_choice = 'urlscal'
+    if args.urlscan:
+        pass
+    elif args.spyonweb:
+        api_choice = 'spyonweb'
 
-    SwampApp = Swamp(cli=True,outfile=args.o)
+    SwampApp = Swamp(cli=True, outfile=args.o, api=api_choice, api_key=args.api_key)
     SwampApp.show_banner()
     SwampApp.run(id=args.id,url=args.url)
