@@ -39,3 +39,9 @@ associated_urls = Swamp.run(url="infowars.com") # list of unique urls associated
 
 associated_domains = Swamp.urls_to_domains(associated_urls) # reduces the list of urls to a list of unique domains
 ```
+
+Test scripts are included.
+
+To verify the CLI functionality: `./test.sh [<your_SpyOnWeb_Token>]`
+
+To verify the python module functionality: `python test.py [-spyonweb_token <your_SpyOnWeb_Token>]`
