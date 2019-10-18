@@ -24,16 +24,22 @@ Full results are printed to screen, and can be written to file with the `-o` fla
 python3 swamp.py -id UA-6888464-2 -o myOutputFile.txt
 ```
 
-To use SpyOnWeb, include the `-spyonweb` flag, and set the API token with `-token`.
+To use SpyOnWeb, first edit line 14 of `swamp.py` to provide your SpyOnWeb API Key:
+```python
+# USER API KEYS
+SPY_ON_WEB_API_KEY="Your API Key Here"
+```
+
+You can then include the `-spyonweb` flag on the command line.
 ```bash
-python3 swamp.py -id UA-6888464-2 -spyonweb -token YOUR_API_TOKEN
+python3 swamp.py -id UA-6888464-2 -spyonweb
 ```
 
 Additionally, you can use swamp.py in your own python script.
 ```python
 import swamp
 Swamp = swamp.Swamp() # init Swamp object (by default uses urlscan.io)
-Swamp = swamp.Swamp(api="spyonweb",token="YOUR_API_TOKEN") # init Swamp object to use SpyOnWeb
+Swamp = swamp.Swamp(api="spyonweb") # init Swamp object to use SpyOnWeb
 associated_urls = Swamp.run(id="UA-12345-1") # list of unique urls associated with the tracking ID UA-12345-1
 associated_urls = Swamp.run(url="infowars.com") # list of unique urls associated with the tracking ID(s) found on infowars.com
 
