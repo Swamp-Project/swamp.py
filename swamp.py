@@ -13,9 +13,14 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 class Swamp(object):
 
-    def __init__(self, cli=False, outfile=None): 
+    def __init__(self, cli=False, outfile=None, api="urlscan", token=None): 
         self.cli = cli
         self.outfile = outfile
+        self.api = api
+        self.api_key = token
+        # ensure api_key is given if needed
+        if self.api == "spyonweb":
+            assert self.api_key != None, "SpyOnWeb Requires and API Key."
 
     def run(self,id=None,url=None):
         gid = id
@@ -80,7 +85,8 @@ class Swamp(object):
             validated_https_url = self.validate_url(https_url)
             if not validated_https_url:
                 # try http
-                print(Fore.RED + "Failed.")
+                if self.cli:
+                    print(Fore.RED + "Failed.")
                 http_url = 'http://' + url
                 validated_http_url = self.validate_url(http_url)
                 if not validated_http_url:
@@ -91,12 +97,14 @@ class Swamp(object):
                 return validated_https_url
     
     def validate_url(self,url):
-        print(Fore.GREEN + "Validating {}".format(url))
+        if self.cli:
+            print(Fore.GREEN + "Validating {}".format(url))
         check = requests.head(url)
         if check.status_code < 400:
             # if redirected, return the redirected url
             if check.status_code // 100 == 3:
-                print(Fore.YELLOW + "Redirected to " + Fore.WHITE + "{}".format(check.headers['Location']))
+                if self.cli:
+                    print(Fore.YELLOW + "Redirected to " + Fore.WHITE + "{}".format(check.headers['Location']))
                 return check.headers['Location']
             else:
                 return url
@@ -104,7 +112,8 @@ class Swamp(object):
             return False
     
     def get_gids_from_url(self,url):
-        print(Fore.GREEN + "Analyzing {}...".format(url) + Style.RESET_ALL)
+        if self.cli:
+            print(Fore.GREEN + "Analyzing {}...".format(url) + Style.RESET_ALL)
 
         if self.outfile != None:
             with open(self.outfile,'a') as fObj:
@@ -116,7 +125,8 @@ class Swamp(object):
         gids_list = set(gids_list)
 
         for gid in gids_list:
-            print(Fore.GREEN + "Discovered " + Fore.YELLOW + "{}".format(gid) + Fore.GREEN + " Google Tracking ID in " + Fore.WHITE + "{}".format(url))
+            if self.cli:
+                print(Fore.GREEN + "Discovered " + Fore.YELLOW + "{}".format(gid) + Fore.GREEN + " Google Tracking ID in " + Fore.WHITE + "{}".format(url))
         return gids_list
 
     def scan_gids(self, ids):
@@ -128,14 +138,8 @@ class Swamp(object):
             for _id in ids:
                 urls.extend(self.scan_gid(_id))
             return list(set(urls))
-
-    def scan_gid(self, id):
-        
-        print()
-        print(Fore.GREEN + "Using {} for Google Analytic Lookup".format(id))
     
-        url = 'https://urlscan.io/api/v1/search/?q={}'.format(id) # UA-6888464-2
-
+    def query_api(self,url):
         try:
             # Make web request for that URL and don't verify SSL/TLS certs
             response = requests.get(url, verify=False)
@@ -146,6 +150,13 @@ class Swamp(object):
         if self.cli:
             print(Fore.YELLOW + "[+] " + Fore.RED + "Searching for associated URLs...")
 
+        return response
+
+    def query_urlscan(self, id):
+        url = 'https://urlscan.io/api/v1/search/?q={}'.format(id)
+
+        response = self.query_api(url)
+
         # Output is already JSON so we just need to load and parse it
         j = json.loads(response.text)
 
@@ -155,7 +166,44 @@ class Swamp(object):
         # Extract every URL and add to the set
         for entry in j['results']:
             uniqueurls.add((entry['page']['url']))
+        return uniqueurls
+    
+    # Returns a limit of 100 results
+    # ToD0: Support setting the limit
+    # ToDo: Support getting more results with iterative requests
+    # ToDo: de-duplicate results (e.g. example.com and www.example.com will be returned
+    def query_spyonweb(self,id,api_key):
+        url = 'https://api.spyonweb.com/v1/analytics/{}?access_token={}'.format(id,api_key)
         
+        # the id, less the last set of numbers, is used to get the results from the returned json
+        id_key = '-'.join(id.split('-')[:2])
+        
+        response = self.query_api(url)
+
+        j = json.loads(response.text)
+        if j['status'] != "found":
+            print(Fore.RED + "Error accessing API." + Style.RESET_ALL)
+            sys.exit(1)
+        else:
+            urls = j['result']['analytics'][id_key]['items'].keys()
+            return set(urls)
+
+
+    def scan_gid(self, id):
+        
+        if self.cli:
+            print()
+            print(Fore.GREEN + "Using {} for Reverse Lookup".format(id))
+    
+        if self.api == 'spyonweb':
+            if self.cli:
+                print(Fore.GREEN + "Querying SpyOnWeb")
+            uniqueurls = self.query_spyonweb(id,self.api_key)
+        else: # default to urlscan
+            if self.cli:
+                print(Fore.GREEN + "Querying urlscan")
+            uniqueurls = self.query_urlscan(id)
+
         if self.cli:
             print(Fore.YELLOW + "[+] " + Fore.RED + "Outputting discovered URLs associate to {}...".format(id))
         
@@ -178,15 +226,31 @@ class Swamp(object):
     def url_to_domain(self,url):
         pattern = re.compile("^http[s]?\://[^/]+")
         domain = pattern.match(url)
-        return m[0]
+        return domain[0]
+
+    def urls_to_domains(self,url_iter):
+        domain_set = set([])
+        for url in url_iter:
+            domain_set.add((self.url_to_domain(url)))
+        return list(domain_set)
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(prog="swamp", usage="python %(prog)s [options]")
     ap.add_argument('-id', help="Google Analytics ID", action="store")
     ap.add_argument('-url', help="Website URL", action="store")
     ap.add_argument('-o', help="Output file for results", action="store")
+    ap.add_argument('-urlscan',help="Use the urlscan API for reverse lookup", action="store_true")
+    ap.add_argument('-spyonweb',help="Use the SpyOnWeb API for reverse lookup", action="store_true")
+    ap.add_argument('-token',help="API key or token", action="store")
     args = ap.parse_args()
+    
+    # set api based on user input. defaults to urlscan
+    api_choice = 'urlscan'
+    if args.urlscan:
+        pass
+    elif args.spyonweb:
+        api_choice = 'spyonweb'
 
-    SwampApp = Swamp(cli=True,outfile=args.o)
+    SwampApp = Swamp(cli=True, outfile=args.o, api=api_choice, token=args.token)
     SwampApp.show_banner()
     SwampApp.run(id=args.id,url=args.url)
