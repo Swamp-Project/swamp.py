@@ -168,20 +168,6 @@ class Swamp(object):
             uniqueurls.add((entry['page']['url']))
         return uniqueurls
     
-    # Free Tier: Limit of 100 queries per day
-    # ToDo: add support for membership
-    def query_hacker_target(self, id):
-        # hacker target does not accept the trailing numbers on the Tracking ID (UA-12345-2 is invalid. Must use UA-12345.)
-        if len(id.split('-')) == 3:
-            id = '-'.join(id.split('-')[:2])
-        print(id)
-        url = 'https://api.hackertarget.com/analyticslookup/?q={}'.format(id)
-        
-        response = self.query_api(url)
-        
-        uniqueurls = set(response.text.split('\n'))
-        return uniqueurls
-    
     # Returns a limit of 100 results
     # ToD0: Support setting the limit
     # ToDo: Support getting more results with iterative requests
@@ -199,7 +185,6 @@ class Swamp(object):
             print(Fore.RED + "Error accessing API." + Style.RESET_ALL)
             sys.exit(1)
         else:
-            print(j['result']['analytics'].keys())
             urls = j['result']['analytics'][id_key]['items'].keys()
             return set(urls)
 
@@ -214,10 +199,6 @@ class Swamp(object):
             if self.cli:
                 print(Fore.GREEN + "Querying SpyOnWeb")
             uniqueurls = self.query_spyonweb(id,self.api_key)
-        elif self.api == 'hackertarget':
-            if self.cli:
-                print(Fore.GREEN + "Querying HackerTarget")
-            uniqueurls = self.query_hacker_target(id)
         else: # default to urlscan
             if self.cli:
                 print(Fore.GREEN + "Querying urlscan")
@@ -260,7 +241,6 @@ if __name__ == '__main__':
     ap.add_argument('-o', help="Output file for results", action="store")
     ap.add_argument('-urlscan',help="Use the urlscan API for reverse lookup", action="store_true")
     ap.add_argument('-spyonweb',help="Use the SpyOnWeb API for reverse lookup", action="store_true")
-    ap.add_argument('-hackertarget',help="Use the HackerTarget API for reverse lookup", action="store_true")
     ap.add_argument('-token',help="API key or token", action="store")
     args = ap.parse_args()
     
@@ -270,8 +250,6 @@ if __name__ == '__main__':
         pass
     elif args.spyonweb:
         api_choice = 'spyonweb'
-    elif args.hackertarget:
-        api_choice = 'hackertarget'
 
     SwampApp = Swamp(cli=True, outfile=args.o, api=api_choice, token=args.token)
     SwampApp.show_banner()
