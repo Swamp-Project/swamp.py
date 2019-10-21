@@ -7,9 +7,11 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from colorama import init
 from colorama import Fore, Back, Style
 from datetime import datetime
-
 # disable warning HTTPS
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
+# USER API KEYS
+SPY_ON_WEB_API_KEY=""
 
 class Swamp(object):
 
@@ -17,10 +19,17 @@ class Swamp(object):
         self.cli = cli
         self.outfile = outfile
         self.api = api
-        self.api_key = token
         # ensure api_key is given if needed
         if self.api == "spyonweb":
-            assert self.api_key != None, "SpyOnWeb Requires and API Key."
+            # if a token is passed in, use it (allows me to test without putting my key on the internet)
+            if token != None:
+                self.api_key = token
+            # if not use the user-defined one
+            else:
+                self.api_key = SPY_ON_WEB_API_KEY
+            
+            # ensure that an api key is given
+            assert self.api_key != None and self.api_key != "", "SpyOnWeb Requires and API Key. Set 'SPY_ON_WEB_API_KEY' at the top of swamp.py"
 
     def run(self,id=None,url=None):
         gid = id
