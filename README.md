@@ -24,26 +24,35 @@ Full results are printed to screen, and can be written to file with the `-o` fla
 python3 swamp.py -id UA-6888464-2 -o myOutputFile.txt
 ```
 
+You can control what API(s) Swamp will use by suppliying the `-urlscan` and/or `-spyonweb` flags, such as
+```bash
+python3 swamp.py -id UA-6888464-2 -urlscan -spyonweb
+```
+
+By default, Swamp will attempt to use both urlscan.io and SpyOnWeb.
+
 To use SpyOnWeb, first edit line 14 of `swamp.py` to provide your SpyOnWeb API Key:
 ```python
 # USER API KEYS
 SPY_ON_WEB_API_KEY="Your API Key Here"
 ```
-
-You can then include the `-spyonweb` flag on the command line.
-```bash
-python3 swamp.py -id UA-6888464-2 -spyonweb
-```
+Without this, Swamp will skip any query of SpyOnWeb.
 
 Additionally, you can use swamp.py in your own python script.
 ```python
-import swamp
-Swamp = swamp.Swamp() # init Swamp object (by default uses urlscan.io)
-Swamp = swamp.Swamp(api="spyonweb") # init Swamp object to use SpyOnWeb
-associated_urls = Swamp.run(id="UA-12345-1") # list of unique urls associated with the tracking ID UA-12345-1
-associated_urls = Swamp.run(url="infowars.com") # list of unique urls associated with the tracking ID(s) found on infowars.com
+>>> import swamp
+>>> Swamp = swamp.Swamp() # init Swamp object (by default uses urlscan.io)
+>>> Swamp = swamp.Swamp(api="spyonweb") # init Swamp object to use SpyOnWeb
+>>> Swamp = swamp.Swamp(api=["urlscan","spyonweb"]) # init Swamp object to use SpyOnWeb and urlscan.io
+>>> Swamp = swamp.Swamp(api="all") # init Swamp object to use all available APIs
+>>> results = Swamp.run(id="UA-12345-1")
+>>> results
+{"urlscan":["url1", "url2", "url3"], "spyonweb":["url1", "url2", "url3"]}
+>>> results = Swamp.run(url="infowars.com")
+>>> results
+{"UA-12345-1":{"urlscan":["url1", "url2", "url3"], "spyonweb":["url1", "url2", "url3"]}, "UA-67789-1":{"urlscan":["url1", "url2", "url3"], "spyonweb":["url1", "url2", "url3"]}
 
-associated_domains = Swamp.urls_to_domains(associated_urls) # reduces the list of urls to a list of unique domains
+>>> associated_domains = Swamp.urls_to_domains(associated_urls) # reduces the list of urls to a list of unique domains
 ```
 
 Test scripts are included.
