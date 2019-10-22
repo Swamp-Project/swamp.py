@@ -108,7 +108,12 @@ class Swamp(object):
     def validate_url(self,url):
         if self.cli:
             print(Fore.GREEN + "Validating {}".format(url))
-        check = requests.head(url)
+        try:
+            check = requests.head(url)
+        except requests.exceptions.ConnectionError:
+            print(Fore.RED + "Unable to access {}".format(url) + Style.RESET_ALL)
+            return False
+
         if check.status_code < 400:
             # if redirected, return the redirected url
             if check.status_code // 100 == 3:
