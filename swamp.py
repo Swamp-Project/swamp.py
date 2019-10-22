@@ -18,19 +18,36 @@ class Swamp(object):
     def __init__(self, cli=False, outfile=None, api="urlscan", token=None): 
         self.cli = cli
         self.outfile = outfile
-        self.api = api
+        self.urlscan = False
+        self.spyonweb = False
+        if isinstance(api,list):
+            api_list = api
+        elif isinstance(api,str):
+            api_list = api.split(',')
+        else:
+            raise ValueError('api must be either a string or list of strings')
+
+        if api_list[0] == "all":
+            self.urlscan = True
+            self.spyonweb = True
+        if "spyonweb" in api_list:
+            self.spyonweb = True
+        if "urlscan" in api_list:
+            self.urlscan = True
+
         # ensure api_key is given if needed
-        if self.api == "spyonweb":
+        if self.spyonweb:
             # if a token is passed in, use it (allows me to test without putting my key on the internet)
             if token != None:
                 self.api_key = token
-            # if not use the user-defined one
+            # if not, and the api key is not defined, warn the user and disable spyoneweb
+            elif SPY_ON_WEB_API_KEY == "":
+                print(Fore.RED + "SpyOnWeb API is enabled and an API Key has not been supplied. Set 'SPY_ON_WEB_API_KEY' at the top of swamp.py")
+                self.spyonweb = False
+            # otherwise, use the API key
             else:
                 self.api_key = SPY_ON_WEB_API_KEY
             
-            # ensure that an api key is given
-            assert self.api_key != None and self.api_key != "", "SpyOnWeb Requires and API Key. Set 'SPY_ON_WEB_API_KEY' at the top of swamp.py"
-
     def run(self,id=None,url=None):
         gid = id
         if self.outfile != None:
@@ -148,10 +165,10 @@ class Swamp(object):
             for _id in ids:
                 self.scan_gid(_id)
         else:
-            urls = []
+            urls = {}
             for _id in ids:
-                urls.extend(self.scan_gid(_id))
-            return list(set(urls))
+                urls[_id] = self.scan_gid(_id)
+            return urls
     
     def query_api(self,url):
         try:
@@ -202,40 +219,45 @@ class Swamp(object):
             urls = j['result']['analytics'][id_key]['items'].keys()
             return set(urls)
 
-
-    def scan_gid(self, id):
-        
-        if self.cli:
-            print()
-            print(Fore.GREEN + "Using {} for Reverse Lookup".format(id))
-    
-        if self.api == 'spyonweb':
-            if self.cli:
-                print(Fore.GREEN + "Querying SpyOnWeb")
-            uniqueurls = self.query_spyonweb(id,self.api_key)
-        else: # default to urlscan
-            if self.cli:
-                print(Fore.GREEN + "Querying urlscan")
-            uniqueurls = self.query_urlscan(id)
-
+    def output_api_results(self, id, urls):
         if self.cli:
             print(Fore.YELLOW + "[+] " + Fore.RED + "Outputting discovered URLs associate to {}...".format(id))
-        
+
         if self.outfile != None:
             with open(self.outfile,'a') as fObj:
                 fObj.write("Outputting discovered URLs associate to {}\n".format(id))
-
+        
         # Sort the set and print
-        for url in sorted(uniqueurls):
+        for url in sorted(urls):
             if self.cli:
                 print(Fore.YELLOW + '[!]' + Fore.GREEN + " URL: " + Fore.WHITE + url)
             if self.outfile != None:
                 with open(self.outfile,'a') as fObj:
                     fObj.write("URL: {}\n".format(url))
-        
+
         print(Style.RESET_ALL)
-        if not self.cli:
-            return list(uniqueurls)
+        return list(urls)
+
+    def scan_gid(self, id):
+        if self.cli:
+            print()
+            print(Fore.GREEN + "Using {} for Reverse Lookup".format(id))
+        
+        URLs = {}
+        if self.spyonweb:
+            if self.cli:
+                print(Fore.GREEN + "Querying SpyOnWeb")
+            uniqueurls = self.query_spyonweb(id,self.api_key)
+            URLs['spyonweb'] = self.output_api_results(id,uniqueurls)
+        
+        if self.urlscan:
+            if self.cli:
+                print(Fore.GREEN + "Querying urlscan")
+            uniqueurls = self.query_urlscan(id)
+            URLs['urlscan'] = self.output_api_results(id,uniqueurls)
+
+        return URLs
+
 
     def url_to_domain(self,url):
         pattern = re.compile("^http[s]?\://[^/]+")
@@ -259,11 +281,13 @@ if __name__ == '__main__':
     args = ap.parse_args()
     
     # set api based on user input. defaults to urlscan
-    api_choice = 'urlscan'
+    api_choice = []
     if args.urlscan:
-        pass
-    elif args.spyonweb:
-        api_choice = 'spyonweb'
+        api_choice.append('urlscan')
+    if args.spyonweb:
+        api_choice.append('spyonweb')
+    if not args.spyonweb and not args.urlscan:
+        api_choice = "all"
 
     SwampApp = Swamp(cli=True, outfile=args.o, api=api_choice, token=args.token)
     SwampApp.show_banner()
