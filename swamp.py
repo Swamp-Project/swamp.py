@@ -124,7 +124,7 @@ class Swamp(object):
     
     def validate_url(self,url):
         if self.cli:
-            print(Fore.GREEN + "Validating {}".format(url))
+            print(Fore.GREEN + "Validating {}".format(url) + Fore.WHITE)
         try:
             check = requests.head(url)
         except requests.exceptions.ConnectionError:
