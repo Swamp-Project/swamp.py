@@ -217,7 +217,15 @@ class Swamp(object):
             sys.exit(1)
         else:
             urls = j['result']['analytics'][id_key]['items'].keys()
-            return set(urls)
+            return self.dedupe_urls(set(urls))
+
+    def dedupe_urls(self,url_set):
+        deduped_url_set = set([])
+        for x in url_set:
+            for y in url_set:
+                if x != y and x in y:
+                    deduped_url_set.add(x)
+        return deduped_url_set
 
     def output_api_results(self, id, urls):
         if self.cli:
