@@ -142,34 +142,6 @@ class Swamp(object):
         else:
             return False
     
-    def get_gids_from_url(self,url):
-        if self.cli:
-            print(Fore.GREEN + "Analyzing {}...".format(url) + Style.RESET_ALL)
-
-        if self.outfile != None:
-            with open(self.outfile,'a') as fObj:
-                fObj.write("Anlaysis for {}\n".format(url))
-
-        urlresponse = requests.get(url,verify=False)
-        gids_list = re.findall('UA\-[0-9]+\-[0-9]+',urlresponse.text)
-        # drop duplicate ids
-        gids_list = set(gids_list)
-
-        for gid in gids_list:
-            if self.cli:
-                print(Fore.GREEN + "Discovered " + Fore.YELLOW + "{}".format(gid) + Fore.GREEN + " Google Tracking ID in " + Fore.WHITE + "{}".format(url))
-        return gids_list
-
-    def scan_gids(self, ids):
-        if self.cli:
-            for _id in ids:
-                self.scan_gid(_id)
-        else:
-            urls = {}
-            for _id in ids:
-                urls[_id] = self.scan_gid(_id)
-            return urls
-    
     def query_api(self,url):
         try:
             # Make web request for that URL and don't verify SSL/TLS certs
@@ -219,14 +191,6 @@ class Swamp(object):
             urls = j['result']['analytics'][id_key]['items'].keys()
             return self.dedupe_urls(set(urls))
 
-    def dedupe_urls(self,url_set):
-        deduped_url_set = set([])
-        for x in url_set:
-            for y in url_set:
-                if x != y and x in y:
-                    deduped_url_set.add(x)
-        return deduped_url_set
-
     def output_api_results(self, id, urls):
         if self.cli:
             print(Fore.YELLOW + "[+] " + Fore.RED + "Outputting discovered URLs associate to {}...".format(id))
@@ -245,6 +209,34 @@ class Swamp(object):
 
         print(Style.RESET_ALL)
         return list(urls)
+    
+    def get_gids_from_url(self,url):
+        if self.cli:
+            print(Fore.GREEN + "Analyzing {}...".format(url) + Style.RESET_ALL)
+
+        if self.outfile != None:
+            with open(self.outfile,'a') as fObj:
+                fObj.write("Anlaysis for {}\n".format(url))
+
+        urlresponse = requests.get(url,verify=False)
+        gids_list = re.findall('UA\-[0-9]+\-[0-9]+',urlresponse.text)
+        # drop duplicate ids
+        gids_list = set(gids_list)
+
+        for gid in gids_list:
+            if self.cli:
+                print(Fore.GREEN + "Discovered " + Fore.YELLOW + "{}".format(gid) + Fore.GREEN + " Google Tracking ID in " + Fore.WHITE + "{}".format(url))
+        return gids_list
+
+    def scan_gids(self, ids):
+        if self.cli:
+            for _id in ids:
+                self.scan_gid(_id)
+        else:
+            urls = {}
+            for _id in ids:
+                urls[_id] = self.scan_gid(_id)
+            return urls
 
     def scan_gid(self, id):
         if self.cli:
@@ -266,7 +258,6 @@ class Swamp(object):
 
         return URLs
 
-
     def url_to_domain(self,url):
         pattern = re.compile("^http[s]?\://[^/]+")
         domain = pattern.match(url)
@@ -277,6 +268,14 @@ class Swamp(object):
         for url in url_iter:
             domain_set.add((self.url_to_domain(url)))
         return list(domain_set)
+    
+    def dedupe_urls(self,url_set):
+        deduped_url_set = set([])
+        for x in url_set:
+            for y in url_set:
+                if x != y and x in y:
+                    deduped_url_set.add(x)
+        return deduped_url_set
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(prog="swamp", usage="python %(prog)s [options]")
