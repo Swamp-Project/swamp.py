@@ -233,6 +233,10 @@ class Swamp(object):
         return gids_list
 
     def scan_gids(self, ids, calling_url=None):
+        if len(ids) == 0:
+            print(Fore.YELLOW + "No Tacking IDs found in {}".format(calling_url) + Style.RESET_ALL)
+            sys.exit(1)
+            
         for _id in ids:
             self.scan_gid(_id, calling_url=calling_url)
             
