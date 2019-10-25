@@ -37,11 +37,11 @@ class Swamp(object):
             self.urlscan = True
         
         if self.urlscan:
-            self.urlscan_graph = nx.Graph()
+            self.urlscan_graph = nx.DiGraph()
 
         # ensure api_key is given if needed
         if self.spyonweb:
-            self.spyonweb_graph = nx.Graph()
+            self.spyonweb_graph = nx.DiGraph()
             # if a token is passed in, use it (allows me to test without putting my key on the internet)
             if token != None:
                 self.api_key = token
@@ -142,7 +142,8 @@ class Swamp(object):
         try:
             check = requests.head(url)
         except requests.exceptions.ConnectionError:
-            print(Fore.RED + "Unable to access {}".format(url) + Style.RESET_ALL)
+            if self.cli:
+                print(Fore.RED + "Unable to access {}".format(url) + Style.RESET_ALL)
             return False
 
         if check.status_code < 400:
@@ -163,9 +164,6 @@ class Swamp(object):
         except Exception as e:
             print(Fore.RED + "[ !!! ]   ERROR - {}".format(str(e)))
             sys.exit(1)
-
-        #if self.cli:
-        #    print(Fore.YELLOW + "[+] " + Fore.RED + "Searching for associated URLs...")
 
         return response
 
@@ -188,7 +186,8 @@ class Swamp(object):
             uniqueurls.add((entry['page']['url']))
         
         if len(uniqueurls) == 0:
-            print(Fore.YELLOW + "No results found for {}.".format(id) + Style.RESET_ALL)
+            if self.cli:
+                print(Fore.YELLOW + "No results found for {}.".format(id) + Style.RESET_ALL)
         else:
             edges_to_add = [(calling_url, x) for x in self.urls_to_domains(uniqueurls)]
             #self.urlscan_graph.add_edges_from(list(itertools.combinations(self.urls_to_domains(uniqueurls),2)), tracking_id=id)
@@ -208,8 +207,8 @@ class Swamp(object):
 
         j = json.loads(response.text)
         if j['status'] != "found":
-            print(Fore.RED + "No results found." + Style.RESET_ALL)
-            #sys.exit(1)
+            if self.cli:
+                print(Fore.RED + "No results found for {}.".format(id) + Style.RESET_ALL)
         else:
             uniqueurls = set(j['result']['analytics'][id_key]['items'].keys())
             
@@ -292,7 +291,7 @@ class Swamp(object):
         #extended_list = [[u,v] for u,v,x in list(Graph.edges.data('tracking_id')) if x == id]
         #reduced_set = set([i for sublist in extended_list for i in sublist])
         try:
-            for neighbor in Graph.neighbors(url):
+            for neighbor in Graph.successors(url):
                 print(Fore.YELLOW + '[!]' + Fore.GREEN + " URL: " + Fore.WHITE + neighbor)
                 if self.outfile != None:
                     with open(self.outfile,'a') as fObj:
