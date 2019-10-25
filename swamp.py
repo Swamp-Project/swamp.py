@@ -16,9 +16,16 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 SPY_ON_WEB_API_KEY=""
 
 class Swamp(object):
-    def __init__(self, cli=False, outfile=None, api="urlscan", token=None):
+    def __init__(self, cli=False, outfile=None, api="urlscan", token=None, depth=1):
         self.cli = cli
         self.outfile = outfile
+        # limiting depth to 2
+        if depth > 2:
+            self.depth = 2
+            print(Fore.YELLOW + "Depth is limited to 2." + Style.RESET_ALL)
+        else:
+            self.depth = depth
+            
         self.urlscan = False
         self.spyonweb = False
         if isinstance(api,list):
@@ -61,26 +68,41 @@ class Swamp(object):
                 dt = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
                 fObj.write("{}\n".format(dt))
 
-        if gid != None:
-            self.scan_gid(gid)
+#        if gid != None:
+#            self.scan_gid(gid)
+#            if self.spyonweb and self.cli:
+#                self.output_single_api_results('spyonweb')
+#            
+#            if self.urlscan  and self.cli:
+#                self.output_single_api_results('urlscan')
+#
+#        elif url != None:
+#            validated_url = self.handle_url_protocol(url)
+#            validated_domain = self.url_to_domain(validated_url)
+#            gids = self.get_gids_from_url(validated_url)
+#            self.scan_gids(gids,calling_url=validated_domain)
+#            
+#            if self.spyonweb and self.cli:
+#                self.output_api_results_from_url(validated_domain, 'spyonweb')
+#            
+#            if self.urlscan and self.cli:
+#                self.output_api_results_from_url(validated_domain, 'urlscan')
+        validated_input = self.build_graph(url=url,_id=gid)
+        
+        if gid:
             if self.spyonweb and self.cli:
-                self.output_single_api_results('spyonweb')
+                self.output_single_api_results(validated_input,'spyonweb')
             
             if self.urlscan  and self.cli:
-                self.output_single_api_results('urlscan')
-
-        elif url != None:
-            validated_url = self.handle_url_protocol(url)
-            validated_domain = self.url_to_domain(validated_url)
-            gids = self.get_gids_from_url(validated_url)
-            self.scan_gids(gids,calling_url=validated_domain)
-            
+                self.output_single_api_results(validated_input,'urlscan')
+        
+        elif url:
             if self.spyonweb and self.cli:
-                self.output_api_results_from_url(validated_domain, 'spyonweb')
+                self.output_api_results_from_url(validated_input, 'spyonweb')
             
             if self.urlscan and self.cli:
-                self.output_api_results_from_url(validated_domain, 'urlscan')
-
+                self.output_api_results_from_url(validated_input, 'urlscan')
+                
         else:
             if self.cli:
                 print(Fore.RED + "You must pass in either '-url <webpage url>' or '-id <google tracking id>'")
@@ -88,6 +110,18 @@ class Swamp(object):
             else:
                 assert False, "You must pass in either url=<webpage url string> or id=<google tracking id string>"
 
+    def build_graph(self,url=None,_id=None):
+        assert (url == None or _id == None) and url != _id, "only one of url and _id can be passed in"
+        if _id == None:
+            validated_url = self.handle_url_protocol(url)
+            validated_domain = self.url_to_domain(validated_url)
+            gids = self.get_gids_from_url(validated_url)
+            self.scan_gids(gids,calling_url=validated_domain)
+            return validated_domain
+        elif url == None:
+            self.scan_gids([_id])
+            return _id
+            
     def show_banner(self):
         if self.cli:
             print()
@@ -189,9 +223,12 @@ class Swamp(object):
             if self.cli:
                 print(Fore.YELLOW + "No results found for {}.".format(id) + Style.RESET_ALL)
         else:
-            edges_to_add = [(calling_url, x) for x in self.urls_to_domains(uniqueurls)]
-            #self.urlscan_graph.add_edges_from(list(itertools.combinations(self.urls_to_domains(uniqueurls),2)), tracking_id=id)
-            self.urlscan_graph.add_edges_from(edges_to_add, tracking_id=id)
+            if calling_url != None:
+                edges_to_add = [(calling_url, x) for x in self.urls_to_domains(uniqueurls)]
+                #self.urlscan_graph.add_edges_from(list(itertools.combinations(self.urls_to_domains(uniqueurls),2)), tracking_id=id)
+                self.urlscan_graph.add_edges_from(edges_to_add, tracking_id=id)
+            else:
+                self.urlscan_graph.add_nodes_from(self.urls_to_domains(uniqueurls))
     
     # Returns a limit of 100 results
     # ToD0: Support setting the limit
@@ -212,12 +249,14 @@ class Swamp(object):
         else:
             uniqueurls = set(j['result']['analytics'][id_key]['items'].keys())
             
+            #if calling_url != None:
+            #    uniqueurls.add(calling_url)
             if calling_url != None:
-                uniqueurls.add(calling_url)
-            # add clique to graph
-            edges_to_add = [(calling_url, x) for x in self.urls_to_domains(self.dedupe_urls(uniqueurls))]
-            self.spyonweb_graph.add_edges_from(edges_to_add, tracking_id=id)
-    
+                edges_to_add = [(calling_url, x) for x in self.urls_to_domains(self.dedupe_urls(uniqueurls))]
+                self.spyonweb_graph.add_edges_from(edges_to_add, tracking_id=id)
+            else:
+                self.spyonweb_graph.add_nodes_from(self.urls_to_domains(self.dedupe_urls(uniqueurls)))
+                
     def get_gids_from_url(self,url):
         if self.cli:
             print(Fore.GREEN + "Analyzing {}...".format(url) + Style.RESET_ALL)
@@ -262,7 +301,13 @@ class Swamp(object):
                 
             self.query_urlscan(id,calling_url=calling_url)
     
-    def output_single_api_results(self,api):
+    def output_single_api_results(self,id,api):
+        print(Fore.YELLOW + "[+] " + Fore.RED + "Outputting discovered URLs associate with {}...".format(id))
+        
+        if self.outfile != None:
+            with open(self.outfile,'a') as fObj:
+                fObj.write("Outputting discovered URLs associate with {}\n".format(id))
+        
         if api == 'spyonweb':
             Graph = self.spyonweb_graph.copy()
         else:
