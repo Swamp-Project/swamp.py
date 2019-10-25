@@ -3,7 +3,6 @@ import requests
 import sys
 import argparse
 import re
-import itertools
 import networkx as nx
 
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
@@ -181,14 +180,19 @@ class Swamp(object):
         # Create an empty set to store the URLs so we only get unique ones
         uniqueurls = set([])
         
-        if calling_url != None:
-            uniqueurls.add(calling_url)
-
+        #if calling_url != None:
+        #    uniqueurls.add(calling_url)
+        
         # Extract every URL and add to the set
         for entry in j['results']:
             uniqueurls.add((entry['page']['url']))
-        # add clique to graph
-        self.urlscan_graph.add_edges_from(list(itertools.combinations(self.urls_to_domains(uniqueurls),2)), tracking_id=id)
+        
+        if len(uniqueurls) == 0:
+            print(Fore.YELLOW + "No results found for {}.".format(id) + Style.RESET_ALL)
+        else:
+            edges_to_add = [(calling_url, x) for x in self.urls_to_domains(uniqueurls)]
+            #self.urlscan_graph.add_edges_from(list(itertools.combinations(self.urls_to_domains(uniqueurls),2)), tracking_id=id)
+            self.urlscan_graph.add_edges_from(edges_to_add, tracking_id=id)
     
     # Returns a limit of 100 results
     # ToD0: Support setting the limit
@@ -205,14 +209,15 @@ class Swamp(object):
         j = json.loads(response.text)
         if j['status'] != "found":
             print(Fore.RED + "No results found." + Style.RESET_ALL)
-            sys.exit(1)
+            #sys.exit(1)
         else:
             uniqueurls = set(j['result']['analytics'][id_key]['items'].keys())
             
             if calling_url != None:
                 uniqueurls.add(calling_url)
             # add clique to graph
-            self.spyonweb_graph.add_edges_from(list(itertools.combinations(self.dedupe_urls(uniqueurls),2)), tracking_id=id)
+            edges_to_add = [(calling_url, x) for x in self.urls_to_domains(self.dedupe_urls(uniqueurls))]
+            self.spyonweb_graph.add_edges_from(edges_to_add, tracking_id=id)
     
     def get_gids_from_url(self,url):
         if self.cli:
@@ -286,13 +291,15 @@ class Swamp(object):
         # Sort the set and print
         #extended_list = [[u,v] for u,v,x in list(Graph.edges.data('tracking_id')) if x == id]
         #reduced_set = set([i for sublist in extended_list for i in sublist])
+        try:
+            for neighbor in Graph.neighbors(url):
+                print(Fore.YELLOW + '[!]' + Fore.GREEN + " URL: " + Fore.WHITE + neighbor)
+                if self.outfile != None:
+                    with open(self.outfile,'a') as fObj:
+                        fObj.write("URL: {}\n".format(neighbor))
+        except nx.exception.NetworkXError:
+            print(Fore.WHITE + "None found." + Style.RESET_ALL)
         
-        for neighbor in Graph.neighbors(url):
-            print(Fore.YELLOW + '[!]' + Fore.GREEN + " URL: " + Fore.WHITE + neighbor)
-            if self.outfile != None:
-                with open(self.outfile,'a') as fObj:
-                    fObj.write("URL: {}\n".format(neighbor))
-
         print(Style.RESET_ALL)
 
     def url_to_domain(self,url):
