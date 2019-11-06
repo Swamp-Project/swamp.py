@@ -54,7 +54,13 @@ class Swamp(object):
                 self.api_key = token
             # if not, and the api key is not defined, warn the user and disable spyoneweb
             elif SPY_ON_WEB_API_KEY == "":
-                print(Fore.RED + "SpyOnWeb API is enabled and an API Key has not been supplied. Set 'SPY_ON_WEB_API_KEY' at the top of swamp.py")
+                print(Fore.YELLOW + "                  [!][!][!] WARNING [!][!][!]")
+                print(Fore.YELLOW + "SpyOnWeb API is enabled and an API Key has not been supplied.")
+                print(Fore.YELLOW + "Set 'SPY_ON_WEB_API_KEY' at the top of swamp.py" + Style.RESET_ALL)
+                # if only spyonweb was selected, quit the program
+                if not self.urlscan:
+                    sys.exit(1)
+
                 self.spyonweb = False
             # otherwise, use the API key
             else:
