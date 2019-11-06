@@ -3,6 +3,8 @@ import requests
 import sys
 import argparse
 import re
+import networkx as nx
+
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from colorama import init
 from colorama import Fore, Back, Style
@@ -14,10 +16,16 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 SPY_ON_WEB_API_KEY=""
 
 class Swamp(object):
-
-    def __init__(self, cli=False, outfile=None, api="urlscan", token=None): 
+    def __init__(self, cli=False, outfile=None, api="urlscan", token=None, depth=1):
         self.cli = cli
         self.outfile = outfile
+        # limiting depth to 2
+        if depth > 2:
+            self.depth = 2
+            print(Fore.YELLOW + "Depth is limited to 2." + Style.RESET_ALL)
+        else:
+            self.depth = depth
+            
         self.urlscan = False
         self.spyonweb = False
         if isinstance(api,list):
@@ -34,9 +42,13 @@ class Swamp(object):
             self.spyonweb = True
         if "urlscan" in api_list:
             self.urlscan = True
+        
+        if self.urlscan:
+            self.urlscan_graph = nx.DiGraph()
 
         # ensure api_key is given if needed
         if self.spyonweb:
+            self.spyonweb_graph = nx.DiGraph()
             # if a token is passed in, use it (allows me to test without putting my key on the internet)
             if token != None:
                 self.api_key = token
@@ -56,17 +68,41 @@ class Swamp(object):
                 dt = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
                 fObj.write("{}\n".format(dt))
 
-        if gid != None:
-            urls = self.scan_gid(gid)
-            if not self.cli:
-                return urls
-
-        elif url != None:
-            gids = self.get_gids_from_url(self.handle_url_protocol(url))
-            urls = self.scan_gids(gids)
-            if not self.cli:
-                return urls
-
+#        if gid != None:
+#            self.scan_gid(gid)
+#            if self.spyonweb and self.cli:
+#                self.output_single_api_results('spyonweb')
+#            
+#            if self.urlscan  and self.cli:
+#                self.output_single_api_results('urlscan')
+#
+#        elif url != None:
+#            validated_url = self.handle_url_protocol(url)
+#            validated_domain = self.url_to_domain(validated_url)
+#            gids = self.get_gids_from_url(validated_url)
+#            self.scan_gids(gids,calling_url=validated_domain)
+#            
+#            if self.spyonweb and self.cli:
+#                self.output_api_results_from_url(validated_domain, 'spyonweb')
+#            
+#            if self.urlscan and self.cli:
+#                self.output_api_results_from_url(validated_domain, 'urlscan')
+        validated_input = self.build_graph(url=url,_id=gid)
+        
+        if gid:
+            if self.spyonweb and self.cli:
+                self.output_single_api_results(validated_input,'spyonweb')
+            
+            if self.urlscan  and self.cli:
+                self.output_single_api_results(validated_input,'urlscan')
+        
+        elif url:
+            if self.spyonweb and self.cli:
+                self.output_api_results_from_url(validated_input, 'spyonweb')
+            
+            if self.urlscan and self.cli:
+                self.output_api_results_from_url(validated_input, 'urlscan')
+                
         else:
             if self.cli:
                 print(Fore.RED + "You must pass in either '-url <webpage url>' or '-id <google tracking id>'")
@@ -74,6 +110,18 @@ class Swamp(object):
             else:
                 assert False, "You must pass in either url=<webpage url string> or id=<google tracking id string>"
 
+    def build_graph(self,url=None,_id=None):
+        assert (url == None or _id == None) and url != _id, "only one of url and _id can be passed in"
+        if _id == None:
+            validated_url = self.handle_url_protocol(url)
+            validated_domain = self.url_to_domain(validated_url)
+            gids = self.get_gids_from_url(validated_url)
+            self.scan_gids(gids,calling_url=validated_domain)
+            return validated_domain
+        elif url == None:
+            self.scan_gids([_id])
+            return _id
+            
     def show_banner(self):
         if self.cli:
             print()
@@ -124,11 +172,12 @@ class Swamp(object):
     
     def validate_url(self,url):
         if self.cli:
-            print(Fore.GREEN + "Validating {}".format(url))
+            print(Fore.GREEN + "Validating {}".format(url) + Fore.WHITE)
         try:
             check = requests.head(url)
         except requests.exceptions.ConnectionError:
-            print(Fore.RED + "Unable to access {}".format(url) + Style.RESET_ALL)
+            if self.cli:
+                print(Fore.RED + "Unable to access {}".format(url) + Style.RESET_ALL)
             return False
 
         if check.status_code < 400:
@@ -136,12 +185,78 @@ class Swamp(object):
             if check.status_code // 100 == 3:
                 if self.cli:
                     print(Fore.YELLOW + "Redirected to " + Fore.WHITE + "{}".format(check.headers['Location']))
-                return check.headers['Location']
+                return url
             else:
                 return url
         else:
             return False
     
+    def query_api(self,url):
+        try:
+            # Make web request for that URL and don't verify SSL/TLS certs
+            response = requests.get(url, verify=False)
+        except Exception as e:
+            print(Fore.RED + "[ !!! ]   ERROR - {}".format(str(e)))
+            sys.exit(1)
+
+        return response
+
+    def query_urlscan(self, id, calling_url=None):
+        url = 'https://urlscan.io/api/v1/search/?q={}'.format(id)
+
+        response = self.query_api(url)
+
+        # Output is already JSON so we just need to load and parse it
+        j = json.loads(response.text)
+
+        # Create an empty set to store the URLs so we only get unique ones
+        uniqueurls = set([])
+        
+        #if calling_url != None:
+        #    uniqueurls.add(calling_url)
+        
+        # Extract every URL and add to the set
+        for entry in j['results']:
+            uniqueurls.add((entry['page']['url']))
+        
+        if len(uniqueurls) == 0:
+            if self.cli:
+                print(Fore.YELLOW + "No results found for {}.".format(id) + Style.RESET_ALL)
+        else:
+            if calling_url != None:
+                edges_to_add = [(calling_url, x) for x in self.urls_to_domains(uniqueurls)]
+                #self.urlscan_graph.add_edges_from(list(itertools.combinations(self.urls_to_domains(uniqueurls),2)), tracking_id=id)
+                self.urlscan_graph.add_edges_from(edges_to_add, tracking_id=id)
+            else:
+                self.urlscan_graph.add_nodes_from(self.urls_to_domains(uniqueurls))
+    
+    # Returns a limit of 100 results
+    # ToD0: Support setting the limit
+    # ToDo: Support getting more results with iterative requests
+    # ToDo: de-duplicate results (e.g. example.com and www.example.com will be returned
+    def query_spyonweb(self, id, api_key, calling_url=None):
+        url = 'https://api.spyonweb.com/v1/analytics/{}?access_token={}'.format(id,api_key)
+        
+        # the id, less the last set of numbers, is used to get the results from the returned json
+        id_key = '-'.join(id.split('-')[:2])
+        
+        response = self.query_api(url)
+
+        j = json.loads(response.text)
+        if j['status'] != "found":
+            if self.cli:
+                print(Fore.RED + "No results found for {}.".format(id) + Style.RESET_ALL)
+        else:
+            uniqueurls = set(j['result']['analytics'][id_key]['items'].keys())
+            
+            #if calling_url != None:
+            #    uniqueurls.add(calling_url)
+            if calling_url != None:
+                edges_to_add = [(calling_url, x) for x in self.urls_to_domains(self.dedupe_urls(uniqueurls))]
+                self.spyonweb_graph.add_edges_from(edges_to_add, tracking_id=id)
+            else:
+                self.spyonweb_graph.add_nodes_from(self.urls_to_domains(self.dedupe_urls(uniqueurls)))
+                
     def get_gids_from_url(self,url):
         if self.cli:
             print(Fore.GREEN + "Analyzing {}...".format(url) + Style.RESET_ALL)
@@ -160,108 +275,81 @@ class Swamp(object):
                 print(Fore.GREEN + "Discovered " + Fore.YELLOW + "{}".format(gid) + Fore.GREEN + " Google Tracking ID in " + Fore.WHITE + "{}".format(url))
         return gids_list
 
-    def scan_gids(self, ids):
-        if self.cli:
-            for _id in ids:
-                self.scan_gid(_id)
-        else:
-            urls = {}
-            for _id in ids:
-                urls[_id] = self.scan_gid(_id)
-            return urls
-    
-    def query_api(self,url):
-        try:
-            # Make web request for that URL and don't verify SSL/TLS certs
-            response = requests.get(url, verify=False)
-        except Exception as e:
-            print(Fore.RED + "[ !!! ]   ERROR - {}".format(str(e)))
+    def scan_gids(self, ids, calling_url=None):
+        if len(ids) == 0:
+            print(Fore.YELLOW + "No Tacking IDs found in {}".format(calling_url) + Style.RESET_ALL)
             sys.exit(1)
+            
+        for _id in ids:
+            self.scan_gid(_id, calling_url=calling_url)
+            
 
-        if self.cli:
-            print(Fore.YELLOW + "[+] " + Fore.RED + "Searching for associated URLs...")
-
-        return response
-
-    def query_urlscan(self, id):
-        url = 'https://urlscan.io/api/v1/search/?q={}'.format(id)
-
-        response = self.query_api(url)
-
-        # Output is already JSON so we just need to load and parse it
-        j = json.loads(response.text)
-
-        # Create an empty set to store the URLs so we only get unique ones
-        uniqueurls = set([])
-
-        # Extract every URL and add to the set
-        for entry in j['results']:
-            uniqueurls.add((entry['page']['url']))
-        return uniqueurls
-    
-    # Returns a limit of 100 results
-    # ToD0: Support setting the limit
-    # ToDo: Support getting more results with iterative requests
-    # ToDo: de-duplicate results (e.g. example.com and www.example.com will be returned
-    def query_spyonweb(self,id,api_key):
-        url = 'https://api.spyonweb.com/v1/analytics/{}?access_token={}'.format(id,api_key)
-        
-        # the id, less the last set of numbers, is used to get the results from the returned json
-        id_key = '-'.join(id.split('-')[:2])
-        
-        response = self.query_api(url)
-
-        j = json.loads(response.text)
-        if j['status'] != "found":
-            print(Fore.RED + "Error accessing API." + Style.RESET_ALL)
-            sys.exit(1)
-        else:
-            urls = j['result']['analytics'][id_key]['items'].keys()
-            return set(urls)
-
-    def output_api_results(self, id, urls):
-        if self.cli:
-            print(Fore.YELLOW + "[+] " + Fore.RED + "Outputting discovered URLs associate to {}...".format(id))
-
-        if self.outfile != None:
-            with open(self.outfile,'a') as fObj:
-                fObj.write("Outputting discovered URLs associate to {}\n".format(id))
-        
-        # Sort the set and print
-        for url in sorted(urls):
-            if self.cli:
-                print(Fore.YELLOW + '[!]' + Fore.GREEN + " URL: " + Fore.WHITE + url)
-            if self.outfile != None:
-                with open(self.outfile,'a') as fObj:
-                    fObj.write("URL: {}\n".format(url))
-
-        print(Style.RESET_ALL)
-        return list(urls)
-
-    def scan_gid(self, id):
+    def scan_gid(self, id, calling_url=None):
         if self.cli:
             print()
             print(Fore.GREEN + "Using {} for Reverse Lookup".format(id))
         
-        URLs = {}
         if self.spyonweb:
             if self.cli:
                 print(Fore.GREEN + "Querying SpyOnWeb")
-            uniqueurls = self.query_spyonweb(id,self.api_key)
-            URLs['spyonweb'] = self.output_api_results(id,uniqueurls)
+                
+            self.query_spyonweb(id,self.api_key,calling_url=calling_url)
         
         if self.urlscan:
             if self.cli:
                 print(Fore.GREEN + "Querying urlscan")
-            uniqueurls = self.query_urlscan(id)
-            URLs['urlscan'] = self.output_api_results(id,uniqueurls)
+                
+            self.query_urlscan(id,calling_url=calling_url)
+    
+    def output_single_api_results(self,id,api):
+        print(Fore.YELLOW + "[+] " + Fore.RED + "Outputting discovered URLs associate with {}...".format(id))
+        
+        if self.outfile != None:
+            with open(self.outfile,'a') as fObj:
+                fObj.write("Outputting discovered URLs associate with {}\n".format(id))
+        
+        if api == 'spyonweb':
+            Graph = self.spyonweb_graph.copy()
+        else:
+            Graph = self.urlscan_graph.copy()
+        
+        for url in Graph.nodes():
+            print(Fore.YELLOW + '[!]' + Fore.GREEN + " URL: " + Fore.WHITE + url)
+            if self.outfile != None:
+                with open(self.outfile,'a') as fObj:
+                    fObj.write("URL: {}\n".format(url))
+        
+    def output_api_results_from_url(self, url, api):
+        
+        print(Fore.YELLOW + "[+] " + Fore.RED + "Outputting {} discovered URLs associate with {}...".format(api,url))
 
-        return URLs
-
+        if self.outfile != None:
+            with open(self.outfile,'a') as fObj:
+                fObj.write("Outputting {} discovered URLs associate with {}\n".format(api,url))
+        
+        if api == 'spyonweb':
+            Graph = self.spyonweb_graph.copy()
+        else:
+            Graph = self.urlscan_graph.copy()
+        
+        # Sort the set and print
+        #extended_list = [[u,v] for u,v,x in list(Graph.edges.data('tracking_id')) if x == id]
+        #reduced_set = set([i for sublist in extended_list for i in sublist])
+        try:
+            for neighbor in Graph.successors(url):
+                print(Fore.YELLOW + '[!]' + Fore.GREEN + " URL: " + Fore.WHITE + neighbor)
+                if self.outfile != None:
+                    with open(self.outfile,'a') as fObj:
+                        fObj.write("URL: {}\n".format(neighbor))
+        except nx.exception.NetworkXError:
+            print(Fore.WHITE + "None found." + Style.RESET_ALL)
+        
+        print(Style.RESET_ALL)
 
     def url_to_domain(self,url):
-        pattern = re.compile("^http[s]?\://[^/]+")
-        domain = pattern.match(url)
+        pattern = re.compile('(^http[s]?\://w?w?w?\.?|/$)')
+        prefix_stripped_url = pattern.sub('',url)
+        domain = re.match('[^/]+', prefix_stripped_url)
         return domain[0]
 
     def urls_to_domains(self,url_iter):
@@ -269,6 +357,14 @@ class Swamp(object):
         for url in url_iter:
             domain_set.add((self.url_to_domain(url)))
         return list(domain_set)
+    
+    def dedupe_urls(self,url_set):
+        deduped_url_set = set([])
+        for x in url_set:
+            for y in url_set:
+                if x != y and x in y:
+                    deduped_url_set.add(x)
+        return deduped_url_set
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(prog="swamp", usage="python %(prog)s [options]")

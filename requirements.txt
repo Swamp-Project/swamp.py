@@ -2,3 +2,4 @@ json
 colorama
 requests
 re
+networkx
