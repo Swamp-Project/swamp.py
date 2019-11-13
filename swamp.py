@@ -68,31 +68,6 @@ class Swamp(object):
             
     def run(self,id=None,url=None):
         gid = id
-        if self.outfile != None:
-            # write date and time to file to initialize
-            with open(self.outfile,'w') as fObj:
-                dt = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
-                fObj.write("{}\n".format(dt))
-
-#        if gid != None:
-#            self.scan_gid(gid)
-#            if self.spyonweb and self.cli:
-#                self.output_single_api_results('spyonweb')
-#            
-#            if self.urlscan  and self.cli:
-#                self.output_single_api_results('urlscan')
-#
-#        elif url != None:
-#            validated_url = self.handle_url_protocol(url)
-#            validated_domain = self.url_to_domain(validated_url)
-#            gids = self.get_gids_from_url(validated_url)
-#            self.scan_gids(gids,calling_url=validated_domain)
-#            
-#            if self.spyonweb and self.cli:
-#                self.output_api_results_from_url(validated_domain, 'spyonweb')
-#            
-#            if self.urlscan and self.cli:
-#                self.output_api_results_from_url(validated_domain, 'urlscan')
         validated_input = self.build_graph(url=url,_id=gid)
         
         if gid:
@@ -101,6 +76,9 @@ class Swamp(object):
             
             if self.urlscan  and self.cli:
                 self.output_single_api_results(validated_input,'urlscan')
+            
+            if self.outfile:
+                self.output_to_file(_id=validated_input)
         
         elif url:
             if self.spyonweb and self.cli:
@@ -108,6 +86,9 @@ class Swamp(object):
             
             if self.urlscan and self.cli:
                 self.output_api_results_from_url(validated_input, 'urlscan')
+                
+            if self.outfile:
+                self.output_to_file(url=validated_input)
                 
         else:
             if self.cli:
@@ -122,11 +103,33 @@ class Swamp(object):
             validated_url = self.handle_url_protocol(url)
             validated_domain = self.url_to_domain(validated_url)
             gids = self.get_gids_from_url(validated_url)
-            self.scan_gids(gids,calling_url=validated_domain)
-            return validated_domain
+            if self.urlscan:
+                self.scan_gids(gids, calling_url=validated_domain, api='urlscan')
+            if self.spyonweb:
+                self.scan_gids(gids, calling_url=validated_domain, api='spyonweb')
+            root = validated_domain
         elif url == None:
-            self.scan_gids([_id])
-            return _id
+            if self.urlscan:
+                self.scan_gids([_id], api='urlscan')
+            if self.spyonweb:
+                self.scan_gids([_id], api='spyonweb')
+            root = _id
+        
+        if self.depth == 2 and _id == None:
+            if self.urlscan:
+                for n in self.urlscan_graph.successors(root):
+                    valid_url = self.handle_url_protocol(n)
+                    valid_domain = self.url_to_domain(valid_url)
+                    gids = self.get_gids_from_url(valid_url)
+                    self.scan_gids(gids, calling_url=valid_domain, api='urlscan')
+            if self.spyonweb:
+                for n in self.spyonweb_graph.successors(root):
+                    valid_url = self.handle_url_protocol(n)
+                    valid_domain = self.url_to_domain(valid_url)
+                    gids = self.get_gids_from_url(valid_url)
+                    self.scan_gids(gids, calling_url=valid_domain, api='spyonweb')
+        
+        return root
             
     def show_banner(self):
         if self.cli:
@@ -267,9 +270,9 @@ class Swamp(object):
         if self.cli:
             print(Fore.GREEN + "Analyzing {}...".format(url) + Style.RESET_ALL)
 
-        if self.outfile != None:
-            with open(self.outfile,'a') as fObj:
-                fObj.write("Anlaysis for {}\n".format(url))
+#        if self.outfile != None:
+#            with open(self.outfile,'a') as fObj:
+#                fObj.write("Anlaysis for {}\n".format(url))
 
         urlresponse = requests.get(url,verify=False)
         gids_list = re.findall('UA\-[0-9]+\-[0-9]+',urlresponse.text)
@@ -281,27 +284,27 @@ class Swamp(object):
                 print(Fore.GREEN + "Discovered " + Fore.YELLOW + "{}".format(gid) + Fore.GREEN + " Google Tracking ID in " + Fore.WHITE + "{}".format(url))
         return gids_list
 
-    def scan_gids(self, ids, calling_url=None):
+    def scan_gids(self, ids, calling_url=None, api='urlscan'):
         if len(ids) == 0:
             print(Fore.YELLOW + "No Tacking IDs found in {}".format(calling_url) + Style.RESET_ALL)
             sys.exit(1)
             
         for _id in ids:
-            self.scan_gid(_id, calling_url=calling_url)
+            self.scan_gid(_id, calling_url=calling_url, api=api)
             
 
-    def scan_gid(self, id, calling_url=None):
+    def scan_gid(self, id, calling_url=None, api='urlscan'):
         if self.cli:
             print()
             print(Fore.GREEN + "Using {} for Reverse Lookup".format(id))
         
-        if self.spyonweb:
+        if api == 'spyonweb':
             if self.cli:
                 print(Fore.GREEN + "Querying SpyOnWeb")
                 
             self.query_spyonweb(id,self.api_key,calling_url=calling_url)
         
-        if self.urlscan:
+        else:
             if self.cli:
                 print(Fore.GREEN + "Querying urlscan")
                 
@@ -310,9 +313,9 @@ class Swamp(object):
     def output_single_api_results(self,id,api):
         print(Fore.YELLOW + "[+] " + Fore.RED + "Outputting discovered URLs associate with {}...".format(id))
         
-        if self.outfile != None:
-            with open(self.outfile,'a') as fObj:
-                fObj.write("Outputting discovered URLs associate with {}\n".format(id))
+#        if self.outfile != None:
+#            with open(self.outfile,'a') as fObj:
+#                fObj.write("Outputting discovered URLs associate with {}\n".format(id))
         
         if api == 'spyonweb':
             Graph = self.spyonweb_graph.copy()
@@ -321,17 +324,17 @@ class Swamp(object):
         
         for url in Graph.nodes():
             print(Fore.YELLOW + '[!]' + Fore.GREEN + " URL: " + Fore.WHITE + url)
-            if self.outfile != None:
-                with open(self.outfile,'a') as fObj:
-                    fObj.write("URL: {}\n".format(url))
+#            if self.outfile != None:
+#                with open(self.outfile,'a') as fObj:
+#                    fObj.write("URL: {}\n".format(url))
         
     def output_api_results_from_url(self, url, api):
         
         print(Fore.YELLOW + "[+] " + Fore.RED + "Outputting {} discovered URLs associate with {}...".format(api,url))
 
-        if self.outfile != None:
-            with open(self.outfile,'a') as fObj:
-                fObj.write("Outputting {} discovered URLs associate with {}\n".format(api,url))
+#        if self.outfile != None:
+#            with open(self.outfile,'a') as fObj:
+#                fObj.write("Outputting {} discovered URLs associate with {}\n".format(api,url))
         
         if api == 'spyonweb':
             Graph = self.spyonweb_graph.copy()
@@ -344,13 +347,40 @@ class Swamp(object):
         try:
             for neighbor in Graph.successors(url):
                 print(Fore.YELLOW + '[!]' + Fore.GREEN + " URL: " + Fore.WHITE + neighbor)
-                if self.outfile != None:
-                    with open(self.outfile,'a') as fObj:
-                        fObj.write("URL: {}\n".format(neighbor))
+                if self.depth == 2:
+                    for next_neighbor in Graph.successors(neighbor):
+                        print(Fore.YELLOW + '   [!]' + Fore.GREEN + " URL: " + Fore.WHITE + next_neighbor)
         except nx.exception.NetworkXError:
             print(Fore.WHITE + "None found." + Style.RESET_ALL)
         
         print(Style.RESET_ALL)
+    
+    def _output_to_file(self, api, graph, url=None, _id=None):
+        if _id:
+            with open(self.outfile, 'a') as fObj:
+                fObj.write("Using {} for Reverse Lookup with {}.\n".format(_id, api))
+                fObj.write("[+] Discovered URLs associated with {}:\n".format(_id))
+                for x in graph.nodes():
+                    fObj.write("[!] URL: {}\n".format(x))
+        
+        elif url:
+            with open(self.outfile, 'a') as fObj:
+                fObj.write("Analyzing tracking IDs on {} for Reverse Lookup with {}.\n".format(url, api))
+                fObj.write("[+] Discovered URLs associated with {}:\n".format(url))
+                for x in graph.neighbors(url):
+                    fObj.write("[!] URL: {}\n".format(x))
+    
+    def output_to_file(self, url=None, _id=None):
+        with open(self.outfile,'w') as fObj:
+            dt = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+            fObj.write("File created {} UTC\n".format(dt))
+        
+        if self.urlscan:
+            self._output_to_file('urlscan.io', self.urlscan_graph, url=url, _id=_id)
+        
+        if self.spyonweb:
+            self._output_to_file('SpyOnWeb', self.spyonweb_graph, url=url, _id=_id)
+        
 
     def url_to_domain(self,url):
         pattern = re.compile('(^http[s]?\://w?w?w?\.?|/$)')
