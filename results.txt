@@ -1,0 +1,30 @@
+File created 2019-11-13 03:47 UTC
+Analyzing tracking IDs on infowars.com for Reverse Lookup with urlscan.io.
+[+] Discovered URLs associated with infowars.com:
+[!] URL: infowars.com
+   [!] URL: infowars.com
+   [!] URL: newswars.com
+   [!] URL: 3bmeteo.com
+   [!] URL: infowarsshop.com
+   [!] URL: tv.infowars.com
+   [!] URL: europe.infowars.com
+[!] URL: newswars.com
+   [!] URL: infowars.com
+   [!] URL: newswars.com
+   [!] URL: cs-web.dev.infowars.com
+   [!] URL: 3bmeteo.com
+   [!] URL: tv.infowars.com
+   [!] URL: 69.94.158.38
+   [!] URL: prisonplanet.com
+[!] URL: 3bmeteo.com
+   [!] URL: 3bmeteo.com
+[!] URL: infowarsshop.com
+[!] URL: tv.infowars.com
+   [!] URL: 3bmeteo.com
+   [!] URL: newswars.com
+   [!] URL: infowars.com
+   [!] URL: tv.infowars.com
+   [!] URL: 69.94.158.38
+[!] URL: europe.infowars.com
+   [!] URL: infowars.com
+   [!] URL: europe.infowars.com

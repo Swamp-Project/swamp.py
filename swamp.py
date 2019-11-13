@@ -17,9 +17,12 @@ SPY_ON_WEB_API_KEY=""
 
 class Swamp(object):
     def __init__(self, cli=False, outfile=None, api="urlscan", token=None, depth=1):
+        self.VALIDATION_FAIL_FLAG = False
         self.cli = cli
         self.outfile = outfile
         # limiting depth to 2
+        assert type(depth) == int and depth >= 1, "depth argument must be an int >= 1"
+        
         if depth > 2:
             self.depth = 2
             print(Fore.YELLOW + "Depth is limited to 2." + Style.RESET_ALL)
@@ -96,6 +99,15 @@ class Swamp(object):
                 print(Style.RESET_ALL)
             else:
                 assert False, "You must pass in either url=<webpage url string> or id=<google tracking id string>"
+        
+        if not self.cli:
+            Graphs = {}
+            if self.urlscan:
+                Graphs['urlscan'] = self.urlscan_graph
+            if self.spyonweb:
+                Graphs['spyonweb'] = self.spyoneweb_graph
+            
+            return Graphs
 
     def build_graph(self,url=None,_id=None):
         assert (url == None or _id == None) and url != _id, "only one of url and _id can be passed in"
@@ -108,6 +120,7 @@ class Swamp(object):
             if self.spyonweb:
                 self.scan_gids(gids, calling_url=validated_domain, api='spyonweb')
             root = validated_domain
+            
         elif url == None:
             if self.urlscan:
                 self.scan_gids([_id], api='urlscan')
@@ -119,12 +132,18 @@ class Swamp(object):
             if self.urlscan:
                 for n in self.urlscan_graph.successors(root):
                     valid_url = self.handle_url_protocol(n)
+                    if self.VALIDATION_FAIL_FLAG:
+                        self.VALIDATION_FAIL_FLAG = False
+                        continue
                     valid_domain = self.url_to_domain(valid_url)
                     gids = self.get_gids_from_url(valid_url)
                     self.scan_gids(gids, calling_url=valid_domain, api='urlscan')
             if self.spyonweb:
                 for n in self.spyonweb_graph.successors(root):
                     valid_url = self.handle_url_protocol(n)
+                    if self.VALIDATION_FAIL_FLAG:
+                        self.VALIDATION_FAIL_FLAG = False
+                        continue
                     valid_domain = self.url_to_domain(valid_url)
                     gids = self.get_gids_from_url(valid_url)
                     self.scan_gids(gids, calling_url=valid_domain, api='spyonweb')
@@ -173,7 +192,8 @@ class Swamp(object):
                 http_url = 'http://' + url
                 validated_http_url = self.validate_url(http_url)
                 if not validated_http_url:
-                    raise ValueError("{} is not a valid URL".format(url))
+                    print(Fore.RED + "{} is not a valid URL".format(url) + Style.RESET_ALL)
+                    self.VALIDATION_FAIL_FLAG = True
                 else:
                     return validated_http_url
             else:
@@ -287,7 +307,6 @@ class Swamp(object):
     def scan_gids(self, ids, calling_url=None, api='urlscan'):
         if len(ids) == 0:
             print(Fore.YELLOW + "No Tacking IDs found in {}".format(calling_url) + Style.RESET_ALL)
-            sys.exit(1)
             
         for _id in ids:
             self.scan_gid(_id, calling_url=calling_url, api=api)
@@ -367,8 +386,11 @@ class Swamp(object):
             with open(self.outfile, 'a') as fObj:
                 fObj.write("Analyzing tracking IDs on {} for Reverse Lookup with {}.\n".format(url, api))
                 fObj.write("[+] Discovered URLs associated with {}:\n".format(url))
-                for x in graph.neighbors(url):
-                    fObj.write("[!] URL: {}\n".format(x))
+                for neighbor in graph.successors(url):
+                    fObj.write("[!] URL: {}\n".format(neighbor))
+                    if self.depth == 2:
+                        for next_neighbor in graph.successors(neighbor):
+                            fObj.write("   [!] URL: {}\n".format(next_neighbor))
     
     def output_to_file(self, url=None, _id=None):
         with open(self.outfile,'w') as fObj:
@@ -410,6 +432,7 @@ if __name__ == '__main__':
     ap.add_argument('-urlscan',help="Use the urlscan API for reverse lookup", action="store_true")
     ap.add_argument('-spyonweb',help="Use the SpyOnWeb API for reverse lookup", action="store_true")
     ap.add_argument('-token',help="API key or token", action="store")
+    ap.add_argument('-depth',help="Depth of search", action="store", default=1, type=int)
     args = ap.parse_args()
     
     # set api based on user input. defaults to urlscan
@@ -420,7 +443,7 @@ if __name__ == '__main__':
         api_choice.append('spyonweb')
     if not args.spyonweb and not args.urlscan:
         api_choice = "all"
-
-    SwampApp = Swamp(cli=True, outfile=args.o, api=api_choice, token=args.token)
+        
+    SwampApp = Swamp(cli=True, outfile=args.o, api=api_choice, token=args.token, depth=args.depth)
     SwampApp.show_banner()
     SwampApp.run(id=args.id,url=args.url)
